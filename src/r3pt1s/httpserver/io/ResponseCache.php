@@ -10,7 +10,7 @@ final class ResponseCache {
     private array $cache = [];
 
     public function tick(HttpServer $server): void {
-        $cachingTime = $server->getCachingTimeInSeconds();
+        $cachingTime = $server->cachignTimeInSeconds();
         $now = time();
         $keysToRemove = [];
 
@@ -26,19 +26,19 @@ final class ResponseCache {
         }
     }
 
-    public function cache(HttpServer $server, RequestContext $request, Response $response): void {
-        if (!$server->isEnableResponseCaching()) return;
+    public function cache(HttpServer $server, RequestContext $request, ResponseBuilder $response): void {
+        if (!$server->enabledResponseCaching()) return;
         $this->cache[$this->buildCacheKey($request)] = [$response, time()];
     }
 
-    public function check(HttpServer $server, RequestContext $request): ?Response {
-        if (!$server->isEnableResponseCaching()) return null;
-        if ($request->getMethod() !== RequestMethod::GET) return null;
+    public function check(HttpServer $server, RequestContext $request): ?ResponseBuilder {
+        if (!$server->enabledResponseCaching()) return null;
+        if ($request->method() !== RequestMethod::GET) return null;
         $cacheKey = $this->buildCacheKey($request);
         if (!isset($this->cache[$cacheKey])) return null;
         [$response, $time] = $this->cache[$cacheKey];
 
-        if (time() >= ($time + $server->getCachingTimeInSeconds())) {
+        if (time() >= ($time + $server->cachignTimeInSeconds())) {
             unset($this->cache[$cacheKey]);
             return null;
         }
@@ -47,10 +47,10 @@ final class ResponseCache {
     }
 
     private function buildCacheKey(RequestContext $request): string {
-        $path = $request->getPath();
-        $queries = $request->getQueries(true);
-        $apiVersion = $path->getApiVersion() ?? "no-version";
-        $fullPath = $path->getFullPath() . (count($queries) == 0 ? "" : "?" . http_build_query($queries));
-        return $apiVersion . ":" . $path->getMethod()->name . ":" . $fullPath;
+        $path = $request->path();
+        $queries = $request->queries(true);
+        $apiVersion = $path->apiVersion() ?? "no-version";
+        $fullPath = $path->fullPath() . (count($queries) == 0 ? "" : "?" . http_build_query($queries));
+        return $apiVersion . ":" . $path->method()->name . ":" . $fullPath;
     }
 }

@@ -2,7 +2,6 @@
 
 namespace r3pt1s\httpserver\socket;
 
-use Exception;
 use r3pt1s\httpserver\event\def\ClientRateLimitedEvent;
 use r3pt1s\httpserver\event\def\RequestErrorEvent;
 use r3pt1s\httpserver\event\def\RequestFailedAuthenticationEvent;
@@ -31,9 +30,7 @@ final class SocketServer {
     private int $totalConnections = 0;
     private int $totalRequests = 0;
 
-    public function __construct(
-        private readonly HttpServer $server
-    ) {}
+    public function __construct(private readonly HttpServer $server) {}
 
     public function create(): bool {
         if ($this->socket !== null) return false;
@@ -43,7 +40,7 @@ final class SocketServer {
         socket_set_option($this->socket, SOL_SOCKET, SO_REUSEADDR, 1);
         socket_set_nonblock($this->socket);
 
-        if (!socket_bind($this->socket, $this->server->getAddress()->getAddress(), $this->server->getAddress()->getPort())) return false;
+        if (!socket_bind($this->socket, $this->server->address()->address(), $this->server->address()->port())) return false;
         return socket_listen($this->socket);
     }
 
@@ -136,7 +133,7 @@ final class SocketServer {
         $buffer["buffer"] .= $chunk;
 
         if (strlen($buffer["buffer"]) > HttpConstants::MAX_REQUEST_SIZE) {
-            $this->server->getLogger()->warn("Request too large from %s, closing...", $buffer["address"]);
+            $this->server->logger()->warn("Request too large from %s, closing...", $buffer["address"]);
             $this->closeClient($clientId);
             return;
         }
@@ -152,7 +149,7 @@ final class SocketServer {
                     $buffer["contentLength"] = (int) $matches[1];
 
                     if ($buffer["contentLength"] > HttpConstants::MAX_REQUEST_SIZE) {
-                        $this->server->getLogger()->warn("Content-Length too large from %s, closing...", $buffer["address"]);
+                        $this->server->logger()->warn("Content-Length too large from %s, closing...", $buffer["address"]);
                         $this->closeClient($clientId);
                         return;
                     }
@@ -176,7 +173,7 @@ final class SocketServer {
         
         $client = new SocketClient($address, $this->clients[$clientId]);
 
-        $this->server->getResponseCache()->tick($this->server);
+        $this->server->responseCache()->tick($this->server);
 
         $this->handleRequest($client, $requestBuffer);
 
@@ -199,7 +196,7 @@ final class SocketServer {
         $now = time();
 
         if (($now - $lastCacheCleanup) >= 5) {
-            $this->server->getResponseCache()->tick($this->server);
+            $this->server->responseCache()->tick($this->server);
             $lastCacheCleanup = $now;
         }
     }
@@ -216,33 +213,41 @@ final class SocketServer {
                 return;
             }
 
-            $path = $request->getPath();
+            $path = $request->path();
 
-            if ($path->getApiVersion() !== null) {
-                $ver = $this->server->getVersion($path->getApiVersion());
-                if ($ver !== null && !$ver->getAuthentication()->authenticate($client, $request)) {
-                    $this->server->getEventDispatcher()->dispatch(new RequestFailedAuthenticationEvent($client, $request, true));
-                    $client->respond($path->handleFailedAuth($request));
+            foreach ($this->server->beforeActions() as $actionClosure) {
+                $builder = ($actionClosure)($request);
+                if ($builder instanceof ResponseBuilder) {
+                    $client->respond($builder->build());
                     return;
                 }
             }
 
-            if ($path->getAuthentication()->authenticate($client, $request)) {
-                if ($this->server->getRateLimiter()->checkRequest($client->getAddress(), $endTimestamp, $justRateLimited)) {
+            if ($path->apiVersion() !== null) {
+                $ver = $this->server->getVersion($path->apiVersion());
+                if ($ver !== null && !$ver->authentication()->authenticate($client, $request)) {
+                    $this->server->eventDispatcher()->dispatch(new RequestFailedAuthenticationEvent($client, $request, true));
+                    $client->respond($path->handleFailedAuth($request)->build());
+                    return;
+                }
+            }
+
+            if ($path->authentication()->authenticate($client, $request)) {
+                if ($this->server->rateLimiter()->checkRequest($client->getAddress(), $endTimestamp, $justRateLimited)) {
                     if ($path->isBadRequest($request, $badRequestResponse = ResponseBuilder::create()->code(StatusCode::BAD_REQUEST))) {
-                        $this->server->getEventDispatcher()->dispatch($ev = new RequestInvalidEvent($client, $request, true, $badRequestResponse));
+                        $this->server->eventDispatcher()->dispatch($ev = new RequestInvalidEvent($client, $request, true, $badRequestResponse));
                         $client->respond($ev->getResponseBuilder()->build());
                         return;
                     }
 
                     if ($path->willCauseError($request, $errorResponse = ResponseBuilder::create()->code(StatusCode::INTERNAL_SERVER_ERROR))) {
-                        $this->server->getEventDispatcher()->dispatch($ev = new RequestInvalidEvent($client, $request, false, $errorResponse));
+                        $this->server->eventDispatcher()->dispatch($ev = new RequestInvalidEvent($client, $request, false, $errorResponse));
                         $client->respond($ev->getResponseBuilder()->build());
                         return;
                     }
 
-                    $response = $this->server->getResponseCache()->check($this->server, $request);
-                    $this->server->getEventDispatcher()->dispatch($ev = new RequestHandleEvent($client, $request, $response !== null));
+                    $response = $this->server->responseCache()->check($this->server, $request);
+                    $this->server->eventDispatcher()->dispatch($ev = new RequestHandleEvent($client, $request, $response !== null));
                     if ($ev->isCanceled()) {
                         $client->close();
                         return;
@@ -251,32 +256,42 @@ final class SocketServer {
                     if (!$ev->isUseCachedResponse()) {
                         $response = $path->handle($request);
                         if ($response->getStatusCode() == 200) {
-                            $this->server->getResponseCache()->cache($this->server, $request, $response);
+                            $this->server->responseCache()->cache($this->server, $request, $response);
                         }
                     }
 
-                    if ($response !== null) $client->respond($response);
+                    foreach ($this->server->afterActions() as $actionClosure) {
+                        ($actionClosure)($request, $response);
+                    }
+
+                    if ($response !== null) $client->respond($response->build());
                     else $client->close();
                 } else {
-                    if ($justRateLimited) $this->server->getEventDispatcher()->dispatch(new ClientRateLimitedEvent($client, $request, $endTimestamp));
-                    $client->respond($this->server->getRateLimitResponse($client, $request, $endTimestamp));
+                    if ($justRateLimited) $this->server->eventDispatcher()->dispatch(new ClientRateLimitedEvent($client, $request, $endTimestamp));
+                    $client->respond($this->server->rateLimitResponse($client, $request, $endTimestamp));
                 }
             } else {
-                $this->server->getEventDispatcher()->dispatch(new RequestFailedAuthenticationEvent($client, $request, false));
-                $client->respond($path->handleFailedAuth($request));
+                $this->server->eventDispatcher()->dispatch(new RequestFailedAuthenticationEvent($client, $request, false));
+                $client->respond($path->handleFailedAuth($request)->build());
             }
         } catch (Throwable $exception) {
-            $this->server->getLogger()->error("Unexpected error has occurred while processing request from %s (%s)", $client->getAddress(), $request?->getPath()->getFullPath() ?? "Request not parsed yet");
-            $this->server->getLogger()->exception($exception);
-            $this->server->getEventDispatcher()->dispatch($ev = new RequestErrorEvent(
+            $this->server->logger()->error("Unexpected error has occurred while processing request from %s (%s)", $client->getAddress(), $request?->getPath()->getFullPath() ?? "Request not parsed yet");
+            $this->server->logger()->exception($exception);
+            $this->server->eventDispatcher()->dispatch(new RequestErrorEvent(
                 $client,
                 $request instanceof RequestContext ? $request : null,
-                $exception,
-                ResponseBuilder::create()
-                    ->code(StatusCode::INTERNAL_SERVER_ERROR)
-                    ->body(["message" => "An unexpected error has occurred while processing your request.", "error" => $exception->getMessage()])
+                $exception
             ));
-            $client->respond($ev->getResponseBuilder()->build());
+
+            $builder = ResponseBuilder::create()
+                ->code(StatusCode::INTERNAL_SERVER_ERROR)
+                ->body(["message" => "An unexpected error has occurred while processing your request.", "error" => $exception->getMessage()]);
+
+            if (isset($this->server->mappedExceptions()[$exception::class])) {
+                ($this->server->mappedExceptions()[$exception::class])($request instanceof RequestContext ? $request : null, $client, $exception, $builder);
+            }
+
+            $client->respond($builder->build());
         }
     }
 

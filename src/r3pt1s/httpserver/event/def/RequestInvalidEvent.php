@@ -14,8 +14,8 @@ final class RequestInvalidEvent extends Event {
      * @param SocketClient $client
      * @param RequestContext $requestContext
      * @param bool $identifiedBadRequest When true, event got triggered after isBadRequest, if it is false, event got triggered after willCauseError
-     * @see Path
      * @param ResponseBuilder $responseBuilder
+     *@see Path
      */
     public function __construct(
         private readonly SocketClient $client,

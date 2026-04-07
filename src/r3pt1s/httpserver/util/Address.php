@@ -9,11 +9,11 @@ final readonly class Address {
         private int $port
     ) {}
 
-    public function getAddress(): string {
+    public function address(): string {
         return $this->address;
     }
 
-    public function getPort(): int {
+    public function port(): int {
         return $this->port;
     }
 

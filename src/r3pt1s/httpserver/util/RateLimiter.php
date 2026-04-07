@@ -54,8 +54,8 @@ final class RateLimiter {
         if (!$this->enabled) return -1;
         $timeout = $timeout ?? $this->timeout;
         if ($timeout < 0) $timeout = self::DEFAULT_TIMEOUT;
-        $this->rateLimits[$address->getAddress()] = time() + $timeout;
-        return $this->rateLimits[$address->getAddress()];
+        $this->rateLimits[$address->address()] = time() + $timeout;
+        return $this->rateLimits[$address->address()];
     }
 
     /**
@@ -68,18 +68,18 @@ final class RateLimiter {
         if (!$this->enabled) return true;
         $justRateLimited = false;
         if ($this->checkRateLimit($address)) {
-            $endTimestamp = $this->rateLimits[$address->getAddress()];
+            $endTimestamp = $this->rateLimits[$address->address()];
             return false;
         }
 
-        if (!isset($this->requests[$address->getAddress()]) || $this->requests[$address->getAddress()]["timestamp"] <= time())
-            $this->requests[$address->getAddress()] = [
+        if (!isset($this->requests[$address->address()]) || $this->requests[$address->address()]["timestamp"] <= time())
+            $this->requests[$address->address()] = [
                 "count" => 0,
                 "timestamp" => time() + $this->timeFrame
             ];
 
-        $this->requests[$address->getAddress()]["count"] = $this->requests[$address->getAddress()]["count"] + 1;
-        if ($this->requests[$address->getAddress()]["count"] > $this->maxRequests) {
+        $this->requests[$address->address()]["count"] = $this->requests[$address->address()]["count"] + 1;
+        if ($this->requests[$address->address()]["count"] > $this->maxRequests) {
             $justRateLimited = true;
             $endTimestamp = $this->rateLimit($address);
             return false;
@@ -89,9 +89,9 @@ final class RateLimiter {
     }
 
     public function checkRateLimit(Address $address): bool {
-        if (isset($this->rateLimits[$address->getAddress()])) {
-            if (time() < $this->rateLimits[$address->getAddress()]) return true;
-            unset($this->rateLimits[$address->getAddress()]);
+        if (isset($this->rateLimits[$address->address()])) {
+            if (time() < $this->rateLimits[$address->address()]) return true;
+            unset($this->rateLimits[$address->address()]);
         }
 
         return false;

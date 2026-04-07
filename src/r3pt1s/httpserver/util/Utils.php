@@ -78,9 +78,17 @@ final class Utils {
             }
         }
 
+        $parsedBody = $body;
+        $contentType = $headers["Content-Type"] ?? "";
+        if (str_contains($contentType, "application/json")) {
+            $parsedBody = json_decode($body, true) ?? $body;
+        } elseif (str_contains($contentType, "application/x-www-form-urlencoded")) {
+            parse_str($body, $parsedBody);
+        }
+
         $path = $server->getPath($method, $path);
         if ($path === null) return StatusCode::NOT_FOUND;
-        return new RequestContext($address, $method, $path, $queryParams, $headers, $body);
+        return new RequestContext($address, $method, $path, $queryParams, $headers, $body, $parsedBody);
     }
 
     public static function encodeHeaders(array $headers): array {

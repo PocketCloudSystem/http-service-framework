@@ -22,19 +22,27 @@ final readonly class Response {
         return $httpResponse;
     }
 
-    public function getBody(): string {
+    public function body(): string {
         return $this->body;
     }
 
-    public function getCustomMessage(): ?string {
+    public function customMessage(): ?string {
         return $this->customMessage;
     }
 
-    public function getHeaders(): array {
+    public function header(string $key, mixed $default = null): mixed {
+        return $this->headers[$key] ?? $default;
+    }
+
+    public function getHeader(string $key, mixed $default = null): mixed {
+        return $this->headers[$key] ?? $default;
+    }
+
+    public function headers(): array {
         return $this->headers;
     }
 
-    public function getStatusCode(): int {
+    public function statusCode(): int {
         return $this->statusCode;
     }
 }

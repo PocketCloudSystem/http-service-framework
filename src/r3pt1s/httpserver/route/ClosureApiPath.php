@@ -4,7 +4,6 @@ namespace r3pt1s\httpserver\route;
 
 use Closure;
 use r3pt1s\httpserver\io\RequestContext;
-use r3pt1s\httpserver\io\Response;
 use r3pt1s\httpserver\io\ResponseBuilder;
 use r3pt1s\httpserver\socket\auth\Authentication;
 use r3pt1s\httpserver\util\RequestMethod;
@@ -24,7 +23,7 @@ final class ClosureApiPath extends ApiPath {
         parent::__construct($path, $version, $requestMethod, $authentication);
     }
 
-    public function handle(RequestContext $request): Response {
+    public function handle(RequestContext $request): ResponseBuilder {
         return ($this->handleClosure)($request);
     }
 
@@ -38,7 +37,7 @@ final class ClosureApiPath extends ApiPath {
         return ($this->willCauseErrorClosure)($request, $response);
     }
 
-    public function handleFailedAuth(RequestContext $request): Response {
+    public function handleFailedAuth(RequestContext $request): ResponseBuilder {
         if ($this->handleFailedAuthClosure === null) return parent::handleFailedAuth($request);
         return ($this->handleFailedAuthClosure)($request);
     }

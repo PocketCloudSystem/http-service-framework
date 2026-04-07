@@ -4,6 +4,7 @@ namespace r3pt1s\httpserver\util;
 
 enum StatusCode: int {
 
+    case UNKNOWN = -1;
     case CONTINUE = 100;
     case SWITCH_PROTOCOLS = 101;
     case PROCESSING = 102;
@@ -65,6 +66,26 @@ enum StatusCode: int {
     case BANDWIDTH_LIMIT_EXCEEDED = 509;
     case NOT_EXTENDED = 510;
     case NETWORK_AUTHENTICATION_REQUIRED = 511;
+
+    public function isInformational(): bool {
+        return str_starts_with($this->value, "1");
+    }
+
+    public function isSuccess(): bool {
+        return str_starts_with($this->value, "2");
+    }
+
+    public function isRedirection(): bool {
+        return str_starts_with($this->value, "3");
+    }
+
+    public function isClientError(): bool {
+        return str_starts_with($this->value, "4");
+    }
+
+    public function isServerError(): bool {
+        return str_starts_with($this->value, "5");
+    }
 
     public static function toString(int $code): ?string {
         return match ($code) {

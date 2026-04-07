@@ -25,7 +25,7 @@ final class ResponseBuilder {
 
     public function body(string|array $body): self {
         $this->body = (is_array($body) ? json_encode($body) : $body);
-        if (is_array($body)) $this->contentType("application/json");
+        if (is_array($body)) $this->contentType("application/json; charset=utf-8");
         $this->headers["Content-Length"] = strlen($this->body);
         return $this;
     }
@@ -66,6 +66,22 @@ final class ResponseBuilder {
     public function customMessage(string $message): self {
         $this->customMessage = $message;
         return $this;
+    }
+
+    public function getStatusCode(): int {
+        return $this->statusCode;
+    }
+
+    public function getBody(): string {
+        return $this->body;
+    }
+
+    public function getCustomMessage(): ?string {
+        return $this->customMessage;
+    }
+
+    public function getHeaders(): array {
+        return $this->headers;
     }
 
     public function build(): Response {

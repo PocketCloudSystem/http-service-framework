@@ -17,24 +17,24 @@ class ApiVersion {
         private array $paths = []
     ) {}
 
-    public function addPath(string $method, string $path): void {
+    public function add(string $method, string $path): void {
         $this->paths[$method][] = "/" . trim($path, "/");
     }
 
-    public function getVersion(): string {
+    public function version(): string {
         return $this->version;
     }
 
-    public function getAuthentication(): Authentication {
+    public function authentication(): Authentication {
         return $this->authentication;
     }
 
-    public function isValidPath(string $method, string $path): bool {
-        $path = "/" . trim(str_replace($this->getVersion() . "/", "", $path), "/");
+    public function validPath(string $method, string $path): bool {
+        $path = "/" . trim(str_replace($this->version . "/", "", $path), "/");
         return in_array($path, $this->paths[$method] ?? []);
     }
 
-    public function getPaths(): array {
+    public function paths(): array {
         return $this->paths;
     }
 }
