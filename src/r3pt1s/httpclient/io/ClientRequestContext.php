@@ -14,6 +14,7 @@ use Throwable;
 final class ClientRequestContext {
 
     private CurlHandle $curlHandle;
+    private ?string $finalUrl = null;
 
     public function __construct(
         private readonly string $url,
@@ -27,11 +28,11 @@ final class ClientRequestContext {
         $this->curlHandle = curl_init();
     }
 
-    public function prepareCurlHandle(?string &$url = null): CurlHandle {
+    public function prepareCurlHandle(): CurlHandle {
         curl_reset($this->curlHandle);
         $queryString = empty($this->queries) ? "" : "?" . http_build_query($this->queries);
         $opts = [
-            CURLOPT_URL => $url = $this->url . $queryString,
+            CURLOPT_URL => $this->finalUrl = $this->url . $queryString,
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
             CURLOPT_RETURNTRANSFER => true,
@@ -64,10 +65,12 @@ final class ClientRequestContext {
         }
 
         if ($this->method === RequestMethod::POST) {
-            $opts[CURLOPT_POST] = true;
-            if ($this->body === null && !empty($this->queries)) {
-                $opts[CURLOPT_POSTFIELDS] = substr($queryString, 1);
-                $this->header("Content-Type", "application/x-www-form-urlencoded");
+            if (!$this->body instanceof MultipartBody) {
+                $opts[CURLOPT_POST] = true;
+                if ($this->body === null && !empty($this->queries)) {
+                    $opts[CURLOPT_POSTFIELDS] = substr($queryString, 1);
+                    $this->header("Content-Type", "application/x-www-form-urlencoded");
+                }
             }
         } else if (in_array($this->method, [RequestMethod::PUT, RequestMethod::PATCH, RequestMethod::DELETE])) {
             $opts[CURLOPT_CUSTOMREQUEST] = $this->method->name;
@@ -79,7 +82,7 @@ final class ClientRequestContext {
     }
 
     public function execute(): ClientResponse|Throwable {
-        $this->prepareCurlHandle($url);
+        $this->prepareCurlHandle();
         $result = curl_exec($this->curlHandle);
         $retries = $this->retries;
         if ($result === false) {
@@ -110,7 +113,7 @@ final class ClientRequestContext {
         }
 
         return new ClientResponse(
-            $url,
+            $this->finalUrl,
             $this->method,
             StatusCode::tryFrom($code) ?? StatusCode::UNKNOWN,
             $headers,
@@ -167,6 +170,10 @@ final class ClientRequestContext {
         return $this->curlHandle;
     }
 
+    public function finalUrl(): ?string {
+        return $this->finalUrl;
+    }
+
     public function url(): string {
         return $this->url;
     }
@@ -199,7 +206,7 @@ final class ClientRequestContext {
         return $this->timeout;
     }
 
-    public function retries(): float {
+    public function retries(): int {
         return $this->retries;
     }
 

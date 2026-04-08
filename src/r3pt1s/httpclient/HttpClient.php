@@ -77,7 +77,7 @@ final class HttpClient {
             $errno = curl_errno($ch);
             $error = curl_error($ch);
 
-            if ($errno) {
+            if ($errno !== 0) {
                 $responses[$key] = new RuntimeException("cURL Error ($errno): $error");
             } else {
                 $len = curl_getinfo($ch, CURLINFO_HEADER_SIZE);

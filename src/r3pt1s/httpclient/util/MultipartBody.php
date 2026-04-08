@@ -21,8 +21,17 @@ final class MultipartBody {
         return $this;
     }
 
+    /** @internal */
     public function build(): array {
         return array_merge($this->fields, $this->files);
+    }
+
+    public function fields(): array {
+        return $this->fields;
+    }
+
+    public function files(): array {
+        return $this->files;
     }
 
     public static function create(): self {
